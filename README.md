@@ -92,6 +92,7 @@ After setup, *Configure* (options) lets you change:
 |---|---|
 | Update interval | Minutes between fetches from ICA |
 | JSON data in description | Show extra item data (quantity, offer, EAN, ...) as JSON in each item's description |
+| Categorize items automatically | Give items without a category one when their name matches (see [Categories](#categories)). On by default |
 | Shopping lists | Which ICA shopping lists to track as to-do lists |
 
 Saving the options reloads the integration; changing the tracked lists also refetches them.
@@ -118,6 +119,9 @@ All entities belong to one *ICA* device per account.
 | `ica.delete_shopping_list` | Permanently delete a list from your ICA account |
 | `ica.upsert_shopping_list` | Add/update `rows` (plain text or JSON objects) in a list entity |
 | `ica.add_offers_to_shopping_list` | Add offers by `offer_ids` to a list entity |
+| `ica.get_article_groups` | ICA's article groups (categories) as `{"article_groups": [{"id": 10, "name": "Mejeri"}, ...]}` (returns response) |
+| `ica.get_shopping_list_items` | The items of a list entity with `uid`, `product_name`, `quantity`, `unit`, `completed` and `article_group` (`{"id", "name"}`) (returns response) |
+| `ica.set_item_article_group` | Set the category of items in a list entity: `items: [{"uid": "...", "article_group_id": 7}]`. With `remember` (default on), the choice is used for items with the same name later. Returns `updated` and `not_found` uids |
 
 `upsert_shopping_list` and `add_offers_to_shopping_list` take a `conflict_mode` for items that already exist:
 
@@ -126,6 +130,19 @@ All entities belong to one *ICA* device per account.
 - `IGNORE`: leave the existing row untouched
 
 Example JSON row: `{"productName": "Banan", "productEan": "4011800420710", "quantity": 2, "unit": "st"}`
+
+## Categories
+
+ICA sorts list items into article groups: 3 Bröd, kex och bageri, 4 Frukt & Grönt, 5 Djupfryst, 6 Färskvaror, 7 Hälsa & Skönhet, 8 Kassa, 9 Skafferivaror, 10 Mejeri, 11 Hem & Fritid and 12 Ospecificerad (no category).
+
+An item added from Home Assistant gets its category from, in order:
+
+1. the category chosen earlier for an item with the same name (`ica.set_item_article_group`),
+2. an ICA article with the same name (plural forms count, "Tomater" = "Tomat"),
+3. an ICA article named like one of its words ("Tvål badrum" → "Tvål"),
+4. an ICA article its word ends with ("Havremjölk" → "Mjölk").
+
+With *Categorize items automatically* on, open items in *Ospecificerad* (also ones added in the ICA app) get a category the same way on the next update. The change is saved in ICA, and each item is tried only once per start of Home Assistant. Items that still don't match stay in *Ospecificerad*; set them with `ica.set_item_article_group`.
 
 ## Events
 

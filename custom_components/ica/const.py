@@ -15,15 +15,35 @@ CONF_SHOPPING_LISTS: Final = "shopping_lists"
 CONF_DIRTY_CACHE: Final = "dirty_cache"
 CONF_JSON_DATA_IN_DESC: Final = "json_data_in_desc"
 CONF_AUTH_STATE: Final = "auth_state"
+CONF_AUTO_CATEGORIZE: Final = "auto_categorize"
 
 # Settings that live in `entry.options` (changed via the options flow)
-OPTION_KEYS: Final = (CONF_SHOPPING_LISTS, CONF_JSON_DATA_IN_DESC, "scan_interval")
+OPTION_KEYS: Final = (
+    CONF_SHOPPING_LISTS,
+    CONF_JSON_DATA_IN_DESC,
+    CONF_AUTO_CATEGORIZE,
+    "scan_interval",
+)
 
 DEFAULT_SCAN_INTERVAL: Final = 5
 CACHING_SECONDS_SHORT_TERM: Final = 300  # 5 minutes
 CACHING_SECONDS_LONG_TERM: Final = 86400  # 24 hours
 
-DEFAULT_ARTICLE_GROUP_ID: Final = 12
+DEFAULT_ARTICLE_GROUP_ID: Final = 12  # "Ospecificerad"
+
+# The article groups as ICA returns them, used until they are fetched from ICA
+DEFAULT_ARTICLE_GROUPS: Final = (
+    {"id": 3, "name": "Bröd, kex och bageri"},
+    {"id": 4, "name": "Frukt & Grönt"},
+    {"id": 5, "name": "Djupfryst"},
+    {"id": 6, "name": "Färskvaror"},
+    {"id": 7, "name": "Hälsa & Skönhet"},
+    {"id": 8, "name": "Kassa"},
+    {"id": 9, "name": "Skafferivaror"},
+    {"id": 10, "name": "Mejeri"},
+    {"id": 11, "name": "Hem & Fritid"},
+    {"id": 12, "name": "Ospecificerad"},
+)
 
 # Per-account cache files, `.storage/ica.<account key>.<name>.json`
 ENTRY_CACHE_NAMES: Final = (
@@ -32,9 +52,10 @@ ENTRY_CACHE_NAMES: Final = (
     "favorite_stores",
     "shopping_lists",
     "offers",
+    "category_choices",
 )
 # Cache files shared by all accounts
-SHARED_CACHE_KEYS: Final = ("articles", "products")
+SHARED_CACHE_KEYS: Final = ("articles", "article_groups", "products")
 # Debug dumps written by earlier versions
 LEGACY_DEBUG_CACHE_KEYS: Final = (
     "products_changed--diffs",
@@ -78,6 +99,9 @@ class IcaServices(StrEnum):
     ADD_OFFERS_TO_SHOPPING_LIST = "add_offers_to_shopping_list"
     CREATE_SHOPPING_LIST = "create_shopping_list"
     DELETE_SHOPPING_LIST = "delete_shopping_list"
+    GET_ARTICLE_GROUPS = "get_article_groups"
+    GET_SHOPPING_LIST_ITEMS = "get_shopping_list_items"
+    SET_ITEM_ARTICLE_GROUP = "set_item_article_group"
 
 
 class IcaEvents(StrEnum):

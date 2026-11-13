@@ -104,6 +104,7 @@ async def test_upsert_merge_sends_created_and_changed_rows(
 async def test_upsert_ignore_without_changes_does_not_sync(
     hass, loaded_entry, mock_api
 ):
+    syncs_before = len(mock_api.syncs)
     response = await hass.services.async_call(
         DOMAIN,
         "upsert_shopping_list",
@@ -112,7 +113,7 @@ async def test_upsert_ignore_without_changes_does_not_sync(
         return_response=True,
     )
     assert response[LIST_ENTITY]["success"] is True
-    assert mock_api.syncs == []
+    assert len(mock_api.syncs) == syncs_before
 
 
 async def test_upsert_on_favorites_is_rejected(hass, loaded_entry):

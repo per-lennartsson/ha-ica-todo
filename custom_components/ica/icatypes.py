@@ -472,11 +472,13 @@ class IcaShoppingListSync(TypedDict):
     deletedRows: list[str] | None  # list of offlineIds
 
 
-class IcaProductCategory(TypedDict):
-    Id: int | None
-    Name: str | None
-    ParentId: int | None
-    LastSyncDate: str | None
+class IcaArticleGroup(TypedDict):
+    """An article group (category), e.g. 10 "Mejeri"."""
+
+    id: int
+    name: str | None
+    parentId: int | None
+    lastSyncDate: str | None
 
 
 class IcaArticle(TypedDict):

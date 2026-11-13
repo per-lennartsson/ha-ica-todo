@@ -20,12 +20,22 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .background_worker import BackgroundWorker
 from .caching import CacheEntry
+from .categories import (
+    GroupMatch,
+    build_article_index,
+    group_names,
+    match_article_group,
+    name_key,
+    recategorized_rows,
+)
 from .const import (
     CACHING_SECONDS_SHORT_TERM,
+    CONF_AUTO_CATEGORIZE,
     CONF_DIRTY_CACHE,
     CONF_ICA_ID,
     CONF_SHOPPING_LISTS,
     DEFAULT_ARTICLE_GROUP_ID,
+    DEFAULT_ARTICLE_GROUPS,
     DOMAIN,
     ConflictMode,
     IcaEvents,
@@ -38,6 +48,7 @@ from .icatypes import (
     AuthState,
     IcaAccountCurrentBonus,
     IcaArticle,
+    IcaArticleGroup,
     IcaBaseItem,
     IcaOfferDetails,
     IcaOfferInfo,
@@ -60,12 +71,16 @@ from .utils import (
     resolve_list_entity_ids,
     trim_props,
     try_parse_int,
+    utc_timestamp,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
 # Offers are kept this long after they expired, so items in lists can still show them
 OFFER_RETENTION = timedelta(days=30)
+
+# Article groups (categories) hardly ever change
+ARTICLE_GROUPS_CACHE_SECONDS = 7 * 86400
 
 
 class IcaCoordinatorData(TypedDict):
@@ -111,6 +126,21 @@ class IcaCoordinator(DataUpdateCoordinator[IcaCoordinatorData]):
         self._ica_articles = CacheEntry[list[IcaArticle]](
             hass, "articles", partial(self.api.get_articles)
         )
+        self._ica_article_groups = CacheEntry[list[IcaArticleGroup]](
+            hass,
+            "article_groups",
+            partial(self.api.get_article_groups),
+            expiry_seconds=ARTICLE_GROUPS_CACHE_SECONDS,
+        )
+        # Article group chosen by the household per item name (see `name_key`).
+        # Never refetched, only changed via `async_remember_article_groups`.
+        self._category_choices = CacheEntry[dict[str, int]](
+            hass, f"{key}.category_choices", partial(self._get_category_choices)
+        )
+        self._article_index: tuple[int, dict] | None = None
+        # Rows the automatic categorisation already tried, so a change ICA does
+        # not keep is not sent again on every update
+        self._categorize_attempted: set[str] = set()
         self._ica_baseitems = CacheEntry[list[IcaBaseItem]](
             hass,
             f"{key}.baseitems",
@@ -150,6 +180,8 @@ class IcaCoordinator(DataUpdateCoordinator[IcaCoordinatorData]):
     async def init_cache(self) -> None:
         """Initializes the cache from local files."""
         await self._ica_articles.init_value()
+        await self._ica_article_groups.init_value()
+        await self._category_choices.init_value()
         await self._ica_baseitems.init_value()
         await self._ica_current_bonus.init_value()
         await self._ica_favorite_stores.init_value()
@@ -234,13 +266,50 @@ class IcaCoordinator(DataUpdateCoordinator[IcaCoordinatorData]):
             self._publish()
         return selected_lists
 
-    def get_article_group(self, product_name) -> int:
+    def _get_article_index(self) -> dict:
+        """ICA's articles indexed by name, rebuilt when the articles change."""
         articles = self._ica_articles.current_value() or []
-        product_name = product_name.casefold()
-        for x in articles:
-            if x.get("name", "").casefold() == product_name:
-                return x.get("parentId") or DEFAULT_ARTICLE_GROUP_ID
-        return DEFAULT_ARTICLE_GROUP_ID  # Unspecified
+        if self._article_index is None or self._article_index[0] != id(articles):
+            self._article_index = (id(articles), build_article_index(articles))
+        return self._article_index[1]
+
+    async def _get_category_choices(self) -> dict[str, int]:
+        return self._category_choices.current_value() or {}
+
+    def category_choices(self) -> dict[str, int]:
+        """The article groups the household chose, per item name."""
+        return self._category_choices.current_value() or {}
+
+    def match_article_group(self, product_name: str | None) -> GroupMatch | None:
+        """The article group for an item name, or None when nothing matches."""
+        return match_article_group(
+            product_name, self._get_article_index(), self.category_choices()
+        )
+
+    def get_article_group(self, product_name) -> int:
+        match = self.match_article_group(product_name)
+        return match.group_id if match else DEFAULT_ARTICLE_GROUP_ID
+
+    async def async_get_article_groups(self) -> list[IcaArticleGroup]:
+        """ICA's article groups; the built-in list when ICA can't be reached."""
+        try:
+            groups = await self._ica_article_groups.get_value()
+        except (requests.exceptions.RequestException, ValueError) as err:
+            _LOGGER.warning("Could not fetch the ICA article groups: %s", err)
+            groups = self._ica_article_groups.current_value()
+        return groups or [dict(g) for g in DEFAULT_ARTICLE_GROUPS]
+
+    def article_group_names(self) -> dict[int, str]:
+        """Article group id -> name, from the cache or the built-in list."""
+        return group_names(
+            self._ica_article_groups.current_value() or DEFAULT_ARTICLE_GROUPS
+        )
+
+    async def async_remember_article_groups(self, choices: dict[str, int]) -> None:
+        """Remember the article group chosen for item names, for the next time."""
+        current = dict(self.category_choices())
+        current.update({name_key(k): v for k, v in choices.items() if name_key(k)})
+        await self._category_choices.set_value(current)
 
     _SUMMARY_RE = re.compile(
         r"^(?:(?P<min_quantity>\d+(?:[.,]\d+)?)\s*[-–]\s*)?"
@@ -284,8 +353,10 @@ class IcaCoordinator(DataUpdateCoordinator[IcaCoordinatorData]):
                     x for x in (self.format_quantity(quantity), unit, r["name"]) if x
                 )
 
-        if articleGroupId := self.get_article_group(ti["productName"]):
-            ti["articleGroupId"] = articleGroupId
+        match = self.match_article_group(ti["productName"])
+        ti["articleGroupId"] = match.group_id if match else DEFAULT_ARTICLE_GROUP_ID
+        if match and match.extended_id is not None:
+            ti["articleGroupIdExtended"] = match.extended_id
 
         _LOGGER.debug("Parsed info from '%s' to %s", summary, ti)
         return ti
@@ -501,6 +572,7 @@ class IcaCoordinator(DataUpdateCoordinator[IcaCoordinatorData]):
         # Get user specific data
         await self._ica_current_bonus.get_value(invalidate_cache)
         await self._ica_shopping_lists.get_value(invalidate_cache)
+        await self._async_auto_categorize()
 
         # Get store offers
         await self._ica_favorite_stores.get_value(invalidate_cache)
@@ -606,6 +678,111 @@ class IcaCoordinator(DataUpdateCoordinator[IcaCoordinatorData]):
                     },
                 )
         return updated
+
+    async def _async_auto_categorize(self) -> None:
+        """Give open rows without a category one, when their name now matches.
+
+        Writes to ICA, so the ICA app shows the category too. Failures are only
+        logged: the update itself must not fail because of this.
+        """
+        if not self.config_entry.options.get(CONF_AUTO_CATEGORIZE, True):
+            return
+        lists = list(self._ica_shopping_lists.current_value() or [])
+        for i, shopping_list in enumerate(lists):
+            rows = recategorized_rows(
+                shopping_list.get("rows") or [],
+                self._get_article_index(),
+                self.category_choices(),
+                skip=self._categorize_attempted,
+            )
+            if not rows:
+                continue
+            self._categorize_attempted.update(
+                str(r["offlineId"]).casefold() for r in rows
+            )
+            for row in rows:
+                row["latestChange"] = utc_timestamp()
+            sync = IcaShoppingListSync(
+                offlineId=shopping_list["offlineId"], changedRows=rows
+            )
+            try:
+                updated = await self.api.sync_shopping_list(sync)
+            except requests.exceptions.RequestException as err:
+                _LOGGER.warning(
+                    "Could not set the category of %s rows: %s", len(rows), err
+                )
+                continue
+            _LOGGER.debug("Set the category of %s rows", len(rows))
+            if isinstance(updated, dict) and updated.get("rows") is not None:
+                lists[i] = updated
+                # The update publishes the new state itself when it is done
+                await self._ica_shopping_lists.set_value(lists)
+
+    async def async_set_article_groups(
+        self, offline_id: str, groups: dict[str, int], remember: bool = True
+    ) -> dict[str, list[str]]:
+        """Set the article group of rows, by row offlineId (`uid`).
+
+        With `remember`, the group is also used for items with the same name
+        later. Returns the uids that were updated and the ones not found.
+        """
+        shopping_list = self.get_shopping_list(offline_id)
+        if not shopping_list:
+            raise ValueError(f"Shopping list '{offline_id}' has not been loaded")
+        rows = {
+            str(r.get("offlineId", "")).casefold(): r
+            for r in shopping_list.get("rows") or []
+        }
+        changed: list[dict] = []
+        not_found: list[str] = []
+        choices: dict[str, int] = {}
+        for uid, group_id in groups.items():
+            row = rows.get(str(uid).casefold())
+            if row is None:
+                not_found.append(uid)
+                continue
+            new_row = dict(row)
+            new_row["articleGroupId"] = group_id
+            # The extended group belongs to the old group, so follow the new one
+            new_row["articleGroupIdExtended"] = group_id
+            new_row["latestChange"] = utc_timestamp()
+            changed.append(new_row)
+            if row.get("productName"):
+                choices[row["productName"]] = group_id
+
+        if changed:
+            await self.sync_shopping_list(
+                IcaShoppingListSync(offlineId=offline_id, changedRows=changed)
+            )
+        if remember and choices:
+            await self.async_remember_article_groups(choices)
+        return {
+            "updated": [str(r["offlineId"]) for r in changed],
+            "not_found": not_found,
+        }
+
+    def shopping_list_items(self, offline_id: str) -> list[dict]:
+        """The rows of a list with their category, for other integrations."""
+        shopping_list = self.get_shopping_list(offline_id) or {}
+        names = self.article_group_names()
+        items = []
+        for row in shopping_list.get("rows") or []:
+            group_id = row.get("articleGroupId") or DEFAULT_ARTICLE_GROUP_ID
+            items.append(
+                {
+                    "uid": row.get("offlineId"),
+                    "product_name": row.get("productName"),
+                    "quantity": row.get("quantity"),
+                    "unit": row.get("unit"),
+                    "completed": bool(row.get("isStrikedOver")),
+                    "article_group": {"id": group_id, "name": names.get(group_id)},
+                    "article_group_extended_id": row.get("articleGroupIdExtended"),
+                    "offer_id": row.get("offerId"),
+                    "product_ean": row.get("productEan"),
+                    "latest_change": row.get("latestChange"),
+                }
+            )
+        return items
 
     async def sync_shopping_list(
         self,

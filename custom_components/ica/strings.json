@@ -39,12 +39,14 @@
         "data": {
           "scan_interval": "Update interval (minutes)",
           "json_data_in_desc": "JSON data in description",
-          "shopping_lists": "Shopping lists"
+          "shopping_lists": "Shopping lists",
+          "auto_categorize": "Categorize items automatically"
         },
         "data_description": {
           "scan_interval": "How often to fetch data from ICA",
           "json_data_in_desc": "Show extra item data (quantity, offer, EAN, ...) as JSON in each item's description",
-          "shopping_lists": "The shopping lists to track as to-do lists"
+          "shopping_lists": "The shopping lists to track as to-do lists",
+          "auto_categorize": "Give items without a category (Ospecificerad) one when their name matches an ICA article or an earlier choice. Saved in ICA, so the ICA app shows it too"
         }
       }
     },
@@ -65,6 +67,9 @@
     },
     "integration_not_found": {
       "message": "ICA account {target} was not found"
+    },
+    "unknown_article_group": {
+      "message": "Unknown article group {group}"
     }
   },
   "services": {
@@ -181,6 +186,38 @@
         "entity_id": {
           "name": "Shopping list",
           "description": "The ICA shopping list"
+        }
+      }
+    },
+    "get_article_groups": {
+      "name": "Get article groups",
+      "description": "Returns ICA's article groups (categories), e.g. 10 Mejeri"
+    },
+    "get_shopping_list_items": {
+      "name": "Get shopping list items",
+      "description": "Returns the items of a shopping list with quantity, unit and article group",
+      "fields": {
+        "entity_id": {
+          "name": "Shopping list",
+          "description": "The ICA shopping list"
+        }
+      }
+    },
+    "set_item_article_group": {
+      "name": "Set article group",
+      "description": "Sets the article group (category) of items in a shopping list, in ICA too",
+      "fields": {
+        "entity_id": {
+          "name": "Shopping list",
+          "description": "The ICA shopping list"
+        },
+        "items": {
+          "name": "Items",
+          "description": "List of uid (the item's offline ID) and article_group_id"
+        },
+        "remember": {
+          "name": "Remember",
+          "description": "Use the same article group for items with the same name later"
         }
       }
     }

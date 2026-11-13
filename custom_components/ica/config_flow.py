@@ -20,6 +20,7 @@ from homeassistant.helpers import selector
 
 from .const import (
     CONF_AUTH_STATE,
+    CONF_AUTO_CATEGORIZE,
     CONF_DIRTY_CACHE,
     CONF_ICA_ID,
     CONF_ICA_PIN,
@@ -204,6 +205,10 @@ class IcaOptionsFlowHandler(OptionsFlow):
                 vol.Required(
                     CONF_JSON_DATA_IN_DESC,
                     default=options.get(CONF_JSON_DATA_IN_DESC, False),
+                ): bool,
+                vol.Required(
+                    CONF_AUTO_CATEGORIZE,
+                    default=options.get(CONF_AUTO_CATEGORIZE, True),
                 ): bool,
                 # Without the lists from ICA, the tracked lists are left unchanged
                 **(
