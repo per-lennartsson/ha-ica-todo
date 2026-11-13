@@ -1,4 +1,5 @@
 import base64
+import copy
 import datetime
 import hashlib
 import logging
@@ -253,10 +254,10 @@ class IcaAuthenticator:
 
     def ensure_login(self, refresh: bool | None = None) -> AuthState:
         """This will ensure that a valid auth state is loaded"""
-        state = self._auth_state or AuthState()
-        self._auth_state = self._handle_login(
-            self._credentials, state.copy(), refresh=refresh
-        )
+        # Deep copy: a refresh updates the nested token dict, and that dict must not
+        # be shared with the config entry data, or the change is never persisted.
+        state = copy.deepcopy(self._auth_state or AuthState())
+        self._auth_state = self._handle_login(self._credentials, state, refresh=refresh)
         return self._auth_state
 
     def _handle_login(
