@@ -23,9 +23,9 @@ from .icatypes import (
     AuthState,
     IcaAccountCurrentBonus,
     IcaArticle,
+    IcaArticleGroup,
     IcaArticleOffer,
     IcaBaseItem,
-    IcaProductCategory,
     IcaRecipe,
     IcaShoppingList,
     IcaShoppingListSync,
@@ -154,9 +154,10 @@ class IcaAPI:
         url = str.format(get_rest_url(RANDOM_RECIPES_ENDPOINT), nRecipes)
         return get(self._session, url, self._auth_key)
 
-    def get_product_categories(self) -> list[IcaProductCategory]:
+    def get_article_groups(self) -> list[IcaArticleGroup] | None:
         url = get_rest_url(str.format(ARTICLEGROUPS_ENDPOINT, "2001-01-01"))
-        return get(self._session, url, self._auth_key)
+        data = get(self._session, url, self._auth_key)
+        return data.get("articleGroups") if isinstance(data, dict) else None
 
     def create_shopping_list(
         self, offline_id: int, title: str, comment: str, store_sorting: bool = True

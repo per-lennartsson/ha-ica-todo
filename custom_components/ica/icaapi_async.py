@@ -6,9 +6,9 @@ from .icatypes import (
     AuthState,
     IcaAccountCurrentBonus,
     IcaArticle,
+    IcaArticleGroup,
     IcaArticleOffer,
     IcaBaseItem,
-    IcaProductCategory,
     IcaRecipe,
     IcaShoppingList,
     IcaShoppingListSync,
@@ -66,8 +66,8 @@ class IcaAPIAsync:
     async def get_favorite_products(self):
         return await run_async(lambda: self._api.get_favorite_products())
 
-    async def get_product_categories(self) -> list[IcaProductCategory]:
-        return await run_async(lambda: self._api.get_product_categories())
+    async def get_article_groups(self) -> list[IcaArticleGroup] | None:
+        return await run_async(lambda: self._api.get_article_groups())
 
     async def get_offers(
         self, store_ids: list[int]

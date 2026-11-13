@@ -333,6 +333,26 @@ def setup_global_services(hass: HomeAssistant) -> None:
         )
 
     # Non-entity based Services
+    if not hass.services.has_service(DOMAIN, IcaServices.GET_ARTICLE_GROUPS):
+
+        async def handle_get_article_groups(call: ServiceCall):
+            """ICA's article groups (categories), e.g. 10 "Mejeri"."""
+            coordinator = _get_any_coordinator(hass)
+            groups = await coordinator.async_get_article_groups()
+            return {
+                "article_groups": [
+                    {"id": g["id"], "name": g.get("name")} for g in groups
+                ]
+            }
+
+        hass.services.async_register(
+            DOMAIN,
+            IcaServices.GET_ARTICLE_GROUPS,
+            handle_get_article_groups,
+            schema=vol.Schema({}),
+            supports_response=SupportsResponse.ONLY,
+        )
+
     if not hass.services.has_service(DOMAIN, IcaServices.GET_RECIPE):
 
         async def handle_get_recipe(

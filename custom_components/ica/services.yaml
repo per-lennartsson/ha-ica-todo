@@ -160,3 +160,48 @@ delete_shopping_list:
           exclude_entities:
             - todo.ica_favorite_articles
           multiple: false
+
+get_article_groups:
+
+get_shopping_list_items:
+  fields:
+    entity_id:
+      name: "Shopping list"
+      description: "The ICA shopping list"
+      required: true
+      selector:
+        entity:
+          filter:
+            integration: ica
+            domain: todo
+          exclude_entities:
+            - todo.ica_favorite_articles
+          multiple: false
+
+set_item_article_group:
+  fields:
+    entity_id:
+      name: "Shopping list"
+      description: "The ICA shopping list"
+      required: true
+      selector:
+        entity:
+          filter:
+            integration: ica
+            domain: todo
+          exclude_entities:
+            - todo.ica_favorite_articles
+          multiple: false
+    items:
+      name: "Items"
+      description: "List of uid (the item's offline ID) and article_group_id"
+      example: '[{"uid": "98C1272E-71FC-4EF2-97D6-3E1D4EAF8686", "article_group_id": 7}]'
+      required: true
+      selector:
+        object:
+    remember:
+      name: "Remember"
+      description: "Use the same article group for items with the same name later"
+      default: true
+      selector:
+        boolean:

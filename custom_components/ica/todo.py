@@ -94,6 +94,31 @@ async def async_setup_entry(
         _handle_upsert_shopping_list,
         supports_response=SupportsResponse.OPTIONAL,
     )
+    platform.async_register_entity_service(
+        IcaServices.GET_SHOPPING_LIST_ITEMS,
+        {},
+        _handle_get_shopping_list_items,
+        supports_response=SupportsResponse.ONLY,
+    )
+    platform.async_register_entity_service(
+        IcaServices.SET_ITEM_ARTICLE_GROUP,
+        {
+            vol.Required("items"): vol.All(
+                cv.ensure_list,
+                [
+                    vol.Schema(
+                        {
+                            vol.Required("uid"): cv.string,
+                            vol.Required("article_group_id"): vol.Coerce(int),
+                        }
+                    )
+                ],
+            ),
+            vol.Optional("remember", default=True): cv.boolean,
+        },
+        _handle_set_item_article_group,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
 
 
 def _ensure_shopping_list(entity) -> IcaShoppingListEntity:
@@ -168,6 +193,36 @@ async def _handle_upsert_shopping_list(
         sync, conflict_mode=conflict_mode
     )
     return ServiceCallResponse[IcaShoppingList](success=True, data=updated_list)
+
+
+async def _handle_get_shopping_list_items(entity, call: ServiceCall) -> dict:
+    """The items of an ICA shopping list, with their article group (category)."""
+    entity = _ensure_shopping_list(entity)
+    # Make sure the group names are loaded
+    await entity.coordinator.async_get_article_groups()
+    return {"items": entity.coordinator.shopping_list_items(entity.offline_id)}
+
+
+async def _handle_set_item_article_group(entity, call: ServiceCall) -> dict:
+    """Set the article group (category) of items in an ICA shopping list."""
+    entity = _ensure_shopping_list(entity)
+    coordinator = entity.coordinator
+    known = {g["id"] for g in await coordinator.async_get_article_groups()}
+    groups: dict[str, int] = {}
+    for item in call.data["items"]:
+        if item["article_group_id"] not in known:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="unknown_article_group",
+                translation_placeholders={"group": str(item["article_group_id"])},
+            )
+        groups[item["uid"]] = item["article_group_id"]
+    try:
+        return await coordinator.async_set_article_groups(
+            entity.offline_id, groups, remember=call.data["remember"]
+        )
+    except ValueError as err:
+        raise ServiceValidationError(str(err)) from err
 
 
 class IcaEntity(CoordinatorEntity[IcaCoordinator]):

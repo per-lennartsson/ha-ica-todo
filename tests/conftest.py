@@ -119,6 +119,13 @@ class FakeIcaApi:
     async def get_articles(self):
         return [{"name": "Gurka", "parentId": 3}]
 
+    async def get_article_groups(self):
+        return [
+            {"id": 4, "name": "Frukt & Grönt", "parentId": 1},
+            {"id": 10, "name": "Mejeri", "parentId": 1},
+            {"id": 12, "name": "Ospecificerad", "parentId": 1},
+        ]
+
     async def get_current_bonus(self):
         return {}
 

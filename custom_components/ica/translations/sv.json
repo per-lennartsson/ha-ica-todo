@@ -39,12 +39,14 @@
         "data": {
           "scan_interval": "Uppdateringsintervall (minuter)",
           "json_data_in_desc": "JSON-data i beskrivningen",
-          "shopping_lists": "Inköpslistor"
+          "shopping_lists": "Inköpslistor",
+          "auto_categorize": "Kategorisera varor automatiskt"
         },
         "data_description": {
           "scan_interval": "Hur ofta data hämtas från ICA",
           "json_data_in_desc": "Visa extra data (mängd, erbjudande, EAN, ...) som JSON i varje varas beskrivning",
-          "shopping_lists": "Inköpslistorna som ska visas som att göra-listor"
+          "shopping_lists": "Inköpslistorna som ska visas som att göra-listor",
+          "auto_categorize": "Ge varor utan kategori (Ospecificerad) en kategori när namnet matchar en ICA-vara eller ett tidigare val. Sparas i ICA, så ICA-appen visar den också"
         }
       }
     },
@@ -65,6 +67,9 @@
     },
     "integration_not_found": {
       "message": "ICA-kontot {target} hittades inte"
+    },
+    "unknown_article_group": {
+      "message": "Okänd varugrupp {group}"
     }
   },
   "services": {
@@ -181,6 +186,38 @@
         "entity_id": {
           "name": "Inköpslista",
           "description": "ICA-inköpslistan"
+        }
+      }
+    },
+    "get_article_groups": {
+      "name": "Hämta varugrupper",
+      "description": "Returnerar ICA:s varugrupper (kategorier), t.ex. 10 Mejeri"
+    },
+    "get_shopping_list_items": {
+      "name": "Hämta varor i inköpslista",
+      "description": "Returnerar varorna i en inköpslista med mängd, enhet och varugrupp",
+      "fields": {
+        "entity_id": {
+          "name": "Inköpslista",
+          "description": "ICA-inköpslistan"
+        }
+      }
+    },
+    "set_item_article_group": {
+      "name": "Ange varugrupp",
+      "description": "Anger varugrupp (kategori) för varor i en inköpslista, även i ICA",
+      "fields": {
+        "entity_id": {
+          "name": "Inköpslista",
+          "description": "ICA-inköpslistan"
+        },
+        "items": {
+          "name": "Varor",
+          "description": "Lista med uid (varans offline-ID) och article_group_id"
+        },
+        "remember": {
+          "name": "Kom ihåg",
+          "description": "Använd samma varugrupp för varor med samma namn framöver"
         }
       }
     }
