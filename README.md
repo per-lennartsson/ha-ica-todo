@@ -182,4 +182,5 @@ Requires Home Assistant 2025.1 or later.
 - Setup: `python3.13 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt`
 - Tests: `.venv/bin/pytest` (config/options/reauth flows, migration, entities, services, coordinator, cache and the `utils` helpers; the ICA API is faked in `tests/conftest.py`). CI runs them on every PR.
 - Lint: `pre-commit run -a` (ruff check + format, yamllint).
-- Releases: Release Drafter builds notes from PR labels; publishing a release triggers `.github/workflows/release.yaml`, which writes the version into `manifest.json` and attaches `ica.zip`.
+- CI (`.github/workflows/ci.yaml`, on every PR and push to `main`): ruff, yamllint, pytest, a test build of the release zip, hassfest and HACS validation.
+- Releases: from an up-to-date `main`, push a tag: `git tag v0.12.0 && git push origin v0.12.0` (a suffix such as `-beta1` makes a pre-release). `.github/workflows/release.yaml` runs the tests, checks that the tag is on `main`, stamps the tag's version into `manifest.json` (`scripts/package-release.sh`) and creates the GitHub release with generated notes and `ica.zip` attached, which HACS installs. Never re-use a tag: fix and release a new patch version instead.
