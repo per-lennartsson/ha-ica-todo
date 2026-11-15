@@ -121,6 +121,7 @@ All entities belong to one *ICA* device per account.
 | `ica.add_offers_to_shopping_list` | Add offers by `offer_ids` to a list entity |
 | `ica.get_article_groups` | ICA's article groups (categories) as `{"article_groups": [{"id": 10, "name": "Mejeri"}, ...]}` (returns response) |
 | `ica.get_shopping_list_items` | The items of a list entity with `uid`, `product_name`, `quantity`, `unit`, `completed` and `article_group` (`{"id", "name"}`) (returns response) |
+| `ica.get_item_suggestions` | Item names to suggest while typing, with the category each would get. Optional `query` and `limit`. See [Item history and suggestions](#item-history-and-suggestions) (returns response) |
 | `ica.set_item_article_group` | Set the category of items in a list entity: `items: [{"uid": "...", "article_group_id": 7}]`. With `remember` (default on), the choice is used for items with the same name later. Returns `updated` and `not_found` uids |
 
 `upsert_shopping_list` and `add_offers_to_shopping_list` take a `conflict_mode` for items that already exist:
@@ -138,11 +139,24 @@ ICA sorts list items into article groups: 3 Bröd, kex och bageri, 4 Frukt & Gr�
 An item added from Home Assistant gets its category from, in order:
 
 1. the category chosen earlier for an item with the same name (`ica.set_item_article_group`),
-2. an ICA article with the same name (plural forms count, "Tomater" = "Tomat"),
-3. an ICA article named like one of its words ("Tvål badrum" → "Tvål"),
-4. an ICA article its word ends with ("Havremjölk" → "Mjölk").
+2. the category items with the same name ended up in most often before (see the item history below),
+3. an ICA article with the same name (plural forms count, "Tomater" = "Tomat"),
+4. an ICA article named like one of its words ("Tvål badrum" → "Tvål"),
+5. an ICA article its word ends with ("Havremjölk" → "Mjölk").
 
 With *Categorize items automatically* on, open items in *Ospecificerad* (also ones added in the ICA app) get a category the same way on the next update. The change is saved in ICA, and each item is tried only once per start of Home Assistant. Items that still don't match stay in *Ospecificerad*; set them with `ica.set_item_article_group`.
+
+### Item history and suggestions
+
+The integration keeps a history of the items added to the tracked lists, from Home Assistant, the ICA app or the website alike: per name, how often it was added and which category those items ended up in. A category changed in the ICA app counts too. The history starts from the items in the lists when it is first created, keeps the 2000 most used names, and is stored in `.storage/ica.<account>.item_history.json` (removed with the integration).
+
+`ica.get_item_suggestions` returns names to suggest while typing, for a card's add field: items from the history (most used first), then the account's favourite items, then ICA's articles. Each comes with the category an item with that name would get:
+
+```json
+{"items": [{"name": "Toalettpapper", "source": "history", "count": 7, "article_group": {"id": 11, "name": "Hem & Fritid"}}, ...]}
+```
+
+With `query`, only names containing the text are returned, names starting with it first; `limit` caps the number. Without `query` the full list is returned (a few thousand names), so a card can fetch it once and filter it itself.
 
 ## Events
 

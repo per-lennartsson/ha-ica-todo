@@ -205,3 +205,31 @@ set_item_article_group:
       default: true
       selector:
         boolean:
+
+get_item_suggestions:
+  fields:
+    entity_id:
+      name: "Shopping list"
+      description: "An ICA shopping list of the account"
+      required: true
+      selector:
+        entity:
+          filter:
+            integration: ica
+            domain: todo
+          multiple: false
+    query:
+      name: "Query"
+      description: "Only names matching this text; all names when left out"
+      example: "toal"
+      selector:
+        text:
+    limit:
+      name: "Limit"
+      description: "The most names to return"
+      example: 10
+      selector:
+        number:
+          min: 1
+          max: 10000
+          mode: box

@@ -143,7 +143,8 @@ class FakeIcaApi:
         shopping_list = self.lists[data["offlineId"]]
         rows = shopping_list["rows"]
         for row in data.get("createdRows") or []:
-            rows.append(copy.deepcopy(row))
+            # ICA gives new rows an id
+            rows.append({"id": 100 + len(rows), **copy.deepcopy(row)})
         for row in data.get("changedRows") or []:
             for existing in rows:
                 if existing["offlineId"] == row["offlineId"]:
