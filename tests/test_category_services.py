@@ -3,6 +3,7 @@
 import pytest
 from homeassistant.exceptions import ServiceValidationError
 
+from custom_components.ica.categories import name_key
 from custom_components.ica.const import CONF_AUTO_CATEGORIZE, DOMAIN
 
 from .conftest import LIST_ID
@@ -141,3 +142,67 @@ async def test_set_item_article_group_rejects_unknown_groups(hass, loaded_entry)
             blocking=True,
             return_response=True,
         )
+
+
+async def test_added_items_are_remembered_with_their_category(
+    hass, loaded_entry, mock_api
+):
+    coordinator = loaded_entry.runtime_data
+    # Started from the rows already in the list
+    history = coordinator.item_history()
+    assert history[name_key("Gurka")]["groups"] == {"3": 1}
+    assert history[name_key("Banan")]["count"] == 1
+
+    await hass.services.async_call(
+        "todo",
+        "add_item",
+        {"entity_id": LIST_ENTITY, "item": "Doftsak toa"},
+        blocking=True,
+    )
+    assert coordinator.item_history()["doftsak toa"]["count"] == 1
+
+    # Changing the category in the ICA app is picked up on the next update
+    row = next(
+        r for r in mock_api.lists[LIST_ID]["rows"] if r["productName"] == "Doftsak toa"
+    )
+    row["articleGroupId"] = 11
+    await coordinator.async_refresh_all()
+    assert coordinator.item_history()["doftsak toa"]["groups"] == {"11": 1}
+
+    # The next one gets the most used category, without any choice or article
+    assert coordinator.category_choices() == {}
+    await hass.services.async_call(
+        "todo",
+        "add_item",
+        {"entity_id": LIST_ENTITY, "item": "Doftsak toa"},
+        blocking=True,
+    )
+    assert mock_api.syncs[-1]["createdRows"][0]["articleGroupId"] == 11
+    assert coordinator.item_history()["doftsak toa"]["count"] == 2
+
+
+async def test_get_item_suggestions(hass, loaded_entry):
+    response = await hass.services.async_call(
+        DOMAIN,
+        "get_item_suggestions",
+        {"entity_id": LIST_ENTITY, "query": "gu"},
+        blocking=True,
+        return_response=True,
+    )
+    assert response[LIST_ENTITY]["items"] == [
+        {
+            "name": "Gurka",
+            "source": "history",
+            "count": 1,
+            "article_group": {"id": 3, "name": None},
+        }
+    ]
+
+    response = await hass.services.async_call(
+        DOMAIN,
+        "get_item_suggestions",
+        {"entity_id": LIST_ENTITY, "limit": 2},
+        blocking=True,
+        return_response=True,
+    )
+    assert len(response[LIST_ENTITY]["items"]) == 2

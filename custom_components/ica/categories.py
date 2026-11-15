@@ -27,7 +27,7 @@ class GroupMatch:
 
     group_id: int
     extended_id: int | None
-    source: str  # "choice", "exact", "word" or "compound"
+    source: str  # "choice", "history", "exact", "word" or "compound"
 
 
 @dataclass(frozen=True)
@@ -89,15 +89,17 @@ def match_article_group(
     product_name: str | None,
     index: Mapping[str, _Group],
     choices: Mapping[str, int] | None = None,
+    history: Mapping[str, int] | None = None,
 ) -> GroupMatch | None:
     """Find the article group for an item name, or None when nothing matches.
 
     In order:
     1. a group the household chose earlier for the same name (`choices`),
-    2. an ICA article with the same name,
-    3. an ICA article named like one of the words, first word first
+    2. the group most rows with the same name ended up in before (`history`),
+    3. an ICA article with the same name,
+    4. an ICA article named like one of the words, first word first
        ("Tvål badrum" -> "tvål"),
-    4. an ICA article that a word ends with ("havremjölk" -> "mjölk").
+    5. an ICA article that a word ends with ("havremjölk" -> "mjölk").
     """
     key = name_key(product_name)
     if not key:
@@ -105,6 +107,9 @@ def match_article_group(
 
     if choices and (chosen := choices.get(key)) is not None:
         return GroupMatch(int(chosen), None, "choice")
+
+    if history and (used := history.get(key)) is not None:
+        return GroupMatch(int(used), None, "history")
 
     if group := index.get(key):
         return GroupMatch(group.group_id, group.extended_id, "exact")
@@ -131,6 +136,7 @@ def recategorized_rows(
     index: Mapping[str, _Group],
     choices: Mapping[str, int] | None = None,
     skip: Iterable[str] = (),
+    history: Mapping[str, int] | None = None,
 ) -> list[dict]:
     """Open rows without a real group that now match one, with the new group set.
 
@@ -144,7 +150,7 @@ def recategorized_rows(
             continue
         if str(row.get("offlineId", "")).casefold() in skipped:
             continue
-        match = match_article_group(row.get("productName"), index, choices)
+        match = match_article_group(row.get("productName"), index, choices, history)
         if match is None or is_unspecified(match.group_id):
             continue
         new_row = dict(row)

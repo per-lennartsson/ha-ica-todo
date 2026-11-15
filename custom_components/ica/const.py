@@ -53,6 +53,7 @@ ENTRY_CACHE_NAMES: Final = (
     "shopping_lists",
     "offers",
     "category_choices",
+    "item_history",
 )
 # Cache files shared by all accounts
 SHARED_CACHE_KEYS: Final = ("articles", "article_groups", "products")
@@ -102,6 +103,7 @@ class IcaServices(StrEnum):
     GET_ARTICLE_GROUPS = "get_article_groups"
     GET_SHOPPING_LIST_ITEMS = "get_shopping_list_items"
     SET_ITEM_ARTICLE_GROUP = "set_item_article_group"
+    GET_ITEM_SUGGESTIONS = "get_item_suggestions"
 
 
 class IcaEvents(StrEnum):

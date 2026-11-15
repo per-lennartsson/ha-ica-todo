@@ -42,6 +42,7 @@ from .const import (
     entry_cache_key,
 )
 from .exceptions import IcaAuthError
+from .history import build_suggestions, history_groups, record_rows
 from .icaapi_async import IcaAPIAsync
 from .icatypes import (
     ArticleInfo,
@@ -137,6 +138,12 @@ class IcaCoordinator(DataUpdateCoordinator[IcaCoordinatorData]):
         self._category_choices = CacheEntry[dict[str, int]](
             hass, f"{key}.category_choices", partial(self._get_category_choices)
         )
+        # Items added before, per name: how often and in which category.
+        # Built from the rows seen in the lists, see `history.record_rows`.
+        self._item_history = CacheEntry[dict](
+            hass, f"{key}.item_history", partial(self._get_item_history)
+        )
+        self._history_groups: tuple[int, dict[str, int]] | None = None
         self._article_index: tuple[int, dict] | None = None
         # Rows the automatic categorisation already tried, so a change ICA does
         # not keep is not sent again on every update
@@ -182,6 +189,7 @@ class IcaCoordinator(DataUpdateCoordinator[IcaCoordinatorData]):
         await self._ica_articles.init_value()
         await self._ica_article_groups.init_value()
         await self._category_choices.init_value()
+        await self._item_history.init_value()
         await self._ica_baseitems.init_value()
         await self._ica_current_bonus.init_value()
         await self._ica_favorite_stores.init_value()
@@ -280,11 +288,64 @@ class IcaCoordinator(DataUpdateCoordinator[IcaCoordinatorData]):
         """The article groups the household chose, per item name."""
         return self._category_choices.current_value() or {}
 
+    async def _get_item_history(self) -> dict:
+        return self._item_history.current_value() or {}
+
+    def item_history(self) -> dict:
+        """The items added before, per `name_key`."""
+        return self._item_history.current_value() or {}
+
+    def _get_history_groups(self) -> dict[str, int]:
+        """The most used category per item name, rebuilt when the history changes."""
+        history = self.item_history()
+        if self._history_groups is None or self._history_groups[0] != id(history):
+            self._history_groups = (id(history), history_groups(history))
+        return self._history_groups[1]
+
+    async def _async_record_history(
+        self, changes: list[tuple[list | None, list | None]]
+    ) -> None:
+        """Count the rows added to lists, and the category they ended up in.
+
+        `changes` holds (old rows, new rows) per list. Before there is any
+        history, all rows count as new, so it starts from the current lists.
+        """
+        history = self._item_history.current_value()
+        updated = history
+        now = utc_timestamp()
+        for old_rows, new_rows in changes:
+            if history is None:
+                old_rows = []
+            updated = record_rows(updated, old_rows, new_rows, now) or updated
+        if updated is not history:
+            await self._item_history.set_value(updated)
+
     def match_article_group(self, product_name: str | None) -> GroupMatch | None:
         """The article group for an item name, or None when nothing matches."""
         return match_article_group(
-            product_name, self._get_article_index(), self.category_choices()
+            product_name,
+            self._get_article_index(),
+            self.category_choices(),
+            self._get_history_groups(),
         )
+
+    def item_suggestions(
+        self, query: str | None = None, limit: int | None = None
+    ) -> list[dict]:
+        """Item names to suggest while typing, with the category they would get."""
+        names = self.article_group_names()
+        items = build_suggestions(
+            self.item_history(),
+            self._ica_baseitems.current_value(),
+            self._ica_articles.current_value(),
+            self.match_article_group,
+            query=query,
+            limit=limit,
+        )
+        for item in items:
+            group_id = item.pop("group_id")
+            item["article_group"] = {"id": group_id, "name": names.get(group_id)}
+        return items
 
     def get_article_group(self, product_name) -> int:
         match = self.match_article_group(product_name)
@@ -647,11 +708,13 @@ class IcaCoordinator(DataUpdateCoordinator[IcaCoordinatorData]):
         current = self._ica_shopping_lists.current_value() or []
         updated = await self._get_tracked_shopping_lists()
 
+        history_changes: list[tuple[list | None, list | None]] = []
         for shopping_list in updated:
             previous = next(
                 (lst for lst in current if lst["id"] == shopping_list["id"]), None
             )
             old_rows = previous["rows"] if previous else []
+            history_changes.append((old_rows, shopping_list.get("rows")))
             if previous is not None:
                 # Skipped for lists seen for the first time, so initial load is silent
                 changes = diff_list_rows(old_rows, shopping_list["rows"])
@@ -677,6 +740,7 @@ class IcaCoordinator(DataUpdateCoordinator[IcaCoordinatorData]):
                         "diffs": diffs,
                     },
                 )
+        await self._async_record_history(history_changes)
         return updated
 
     async def _async_auto_categorize(self) -> None:
@@ -694,6 +758,7 @@ class IcaCoordinator(DataUpdateCoordinator[IcaCoordinatorData]):
                 self._get_article_index(),
                 self.category_choices(),
                 skip=self._categorize_attempted,
+                history=self._get_history_groups(),
             )
             if not rows:
                 continue
@@ -715,6 +780,9 @@ class IcaCoordinator(DataUpdateCoordinator[IcaCoordinatorData]):
             _LOGGER.debug("Set the category of %s rows", len(rows))
             if isinstance(updated, dict) and updated.get("rows") is not None:
                 lists[i] = updated
+                await self._async_record_history(
+                    [(shopping_list.get("rows"), updated["rows"])]
+                )
                 # The update publishes the new state itself when it is done
                 await self._ica_shopping_lists.set_value(lists)
 
@@ -803,6 +871,9 @@ class IcaCoordinator(DataUpdateCoordinator[IcaCoordinatorData]):
         state = list(self._ica_shopping_lists.current_value() or [])
         index = index_of(state, "offlineId", updated_list["offlineId"])
         if index >= 0:
+            await self._async_record_history(
+                [(state[index].get("rows"), updated_list.get("rows"))]
+            )
             state[index] = updated_list
             await self._ica_shopping_lists.set_value(state)
             _LOGGER.debug("Dynamically updated Shopping list cache")

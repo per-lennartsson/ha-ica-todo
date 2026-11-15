@@ -119,6 +119,15 @@ async def async_setup_entry(
         _handle_set_item_article_group,
         supports_response=SupportsResponse.OPTIONAL,
     )
+    platform.async_register_entity_service(
+        IcaServices.GET_ITEM_SUGGESTIONS,
+        {
+            vol.Optional("query"): cv.string,
+            vol.Optional("limit"): vol.All(vol.Coerce(int), vol.Range(min=1)),
+        },
+        _handle_get_item_suggestions,
+        supports_response=SupportsResponse.ONLY,
+    )
 
 
 def _ensure_shopping_list(entity) -> IcaShoppingListEntity:
@@ -201,6 +210,18 @@ async def _handle_get_shopping_list_items(entity, call: ServiceCall) -> dict:
     # Make sure the group names are loaded
     await entity.coordinator.async_get_article_groups()
     return {"items": entity.coordinator.shopping_list_items(entity.offline_id)}
+
+
+async def _handle_get_item_suggestions(entity, call: ServiceCall) -> dict:
+    """Item names to suggest while typing, with the category they would get."""
+    coordinator = entity.coordinator
+    # Make sure the group names are loaded
+    await coordinator.async_get_article_groups()
+    return {
+        "items": coordinator.item_suggestions(
+            query=call.data.get("query"), limit=call.data.get("limit")
+        )
+    }
 
 
 async def _handle_set_item_article_group(entity, call: ServiceCall) -> dict:

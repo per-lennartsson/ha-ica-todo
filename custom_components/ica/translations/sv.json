@@ -220,6 +220,24 @@
           "description": "Använd samma varugrupp för varor med samma namn framöver"
         }
       }
+    },
+    "get_item_suggestions": {
+      "name": "Hämta varuförslag",
+      "description": "Returnerar varunamn att föreslå vid inmatning: varor som lagts till förut (vanligast först), favoritvaror och ICA:s artiklar, var och en med den varugrupp den skulle få",
+      "fields": {
+        "entity_id": {
+          "name": "Inköpslista",
+          "description": "En ICA-inköpslista för kontot"
+        },
+        "query": {
+          "name": "Sökord",
+          "description": "Bara namn som matchar texten; alla namn om den utelämnas"
+        },
+        "limit": {
+          "name": "Max antal",
+          "description": "Det största antalet namn att returnera"
+        }
+      }
     }
   }
 }

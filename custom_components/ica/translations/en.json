@@ -220,6 +220,24 @@
           "description": "Use the same article group for items with the same name later"
         }
       }
+    },
+    "get_item_suggestions": {
+      "name": "Get item suggestions",
+      "description": "Returns item names to suggest while typing: items added before (most used first), favourite items and ICA's articles, each with the article group it would get",
+      "fields": {
+        "entity_id": {
+          "name": "Shopping list",
+          "description": "An ICA shopping list of the account"
+        },
+        "query": {
+          "name": "Query",
+          "description": "Only names matching this text; all names when left out"
+        },
+        "limit": {
+          "name": "Limit",
+          "description": "The most names to return"
+        }
+      }
     }
   }
 }
